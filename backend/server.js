@@ -7,16 +7,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* =========================
-   HEALTH CHECK
-========================= */
+const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET;
+
+/* ================= HEALTH CHECK ================= */
 app.get("/", (req, res) => {
   res.send("One Bet One Click backend running 🚀");
 });
 
-/* =========================
-   PAYSTACK ACCOUNT RESOLVE
-========================= */
+/* ================= ACCOUNT RESOLVE ================= */
 app.post("/resolve-account", async (req, res) => {
   const { account_number, bank_code } = req.body;
 
@@ -25,12 +23,12 @@ app.post("/resolve-account", async (req, res) => {
       `https://api.paystack.co/bank/resolve?account_number=${account_number}&bank_code=${bank_code}`,
       {
         headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET}`
+          Authorization: `Bearer ${PAYSTACK_SECRET}`
         }
       }
     );
 
-    return res.json({
+    res.json({
       success: true,
       data: response.data.data
     });
@@ -38,56 +36,81 @@ app.post("/resolve-account", async (req, res) => {
   } catch (err) {
     console.log("Resolve error:", err.response?.data || err.message);
 
-    return res.json({
+    res.json({
       success: false,
       message: err.response?.data?.message || "Account resolve failed"
     });
   }
 });
 
-/* =========================
-   WITHDRAW (SIMULATED / READY FOR TRANSFER)
-========================= */
+/* ================= CREATE RECIPIENT ================= */
+async function createRecipient(account_name, account_number, bank_code) {
+  const response = await axios.post(
+    "https://api.paystack.co/transferrecipient",
+    {
+      type: "nuban",
+      name: account_name,
+      account_number,
+      bank_code,
+      currency: "NGN"
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${PAYSTACK_SECRET}`,
+        "Content-Type": "application/json"
+      }
+    }
+  );
+
+  return response.data.data.recipient_code;
+}
+
+/* ================= REAL WITHDRAWAL ================= */
 app.post("/withdraw", async (req, res) => {
   const { account_number, bank_code, account_name, amount } = req.body;
 
   try {
-    const response = await axios.post(
-      "https://api.paystack.co/transferrecipient",
+    // STEP 1: Create recipient
+    const recipient_code = await createRecipient(
+      account_name,
+      account_number,
+      bank_code
+    );
+
+    // STEP 2: INITIATE TRANSFER (REAL MONEY SENT)
+    const transfer = await axios.post(
+      "https://api.paystack.co/transfer",
       {
-        type: "nuban",
-        name: account_name,
-        account_number,
-        bank_code,
-        currency: "NGN"
+        source: "balance",
+        amount: amount * 100, // convert to kobo
+        recipient: recipient_code,
+        reason: "One Bet One Click Withdrawal"
       },
       {
         headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET}`,
+          Authorization: `Bearer ${PAYSTACK_SECRET}`,
           "Content-Type": "application/json"
         }
       }
     );
 
-    return res.json({
+    res.json({
       success: true,
-      message: "Withdrawal request created",
-      data: response.data.data
+      message: "Transfer initiated successfully",
+      data: transfer.data.data
     });
 
   } catch (err) {
     console.log("Withdraw error:", err.response?.data || err.message);
 
-    return res.json({
+    res.json({
       success: false,
-      message: err.response?.data?.message || "Withdrawal failed"
+      message: err.response?.data?.message || "Transfer failed"
     });
   }
 });
 
-/* =========================
-   START SERVER (RENDER)
-========================= */
+/* ================= SERVER START ================= */
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
