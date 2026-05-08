@@ -1,7 +1,6 @@
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
-require("dotenv").config();
 
 const app = express();
 
@@ -12,7 +11,7 @@ app.use(express.json());
    HEALTH CHECK
 ========================= */
 app.get("/", (req, res) => {
-  res.send("One Bet, One Click backend is running 🚀");
+  res.send("One Bet One Click backend running 🚀");
 });
 
 /* =========================
@@ -41,22 +40,19 @@ app.post("/resolve-account", async (req, res) => {
 
     return res.json({
       success: false,
-      message:
-        err.response?.data?.message ||
-        "Unable to resolve account"
+      message: err.response?.data?.message || "Account resolve failed"
     });
   }
 });
 
 /* =========================
-   WITHDRAW (SIMULATION / TRANSFER READY)
+   WITHDRAW (SIMULATED / READY FOR TRANSFER)
 ========================= */
 app.post("/withdraw", async (req, res) => {
-  const { account_number, bank_code, amount, account_name } = req.body;
+  const { account_number, bank_code, account_name, amount } = req.body;
 
   try {
-    // STEP 1: Create transfer recipient
-    const recipient = await axios.post(
+    const response = await axios.post(
       "https://api.paystack.co/transferrecipient",
       {
         type: "nuban",
@@ -76,7 +72,7 @@ app.post("/withdraw", async (req, res) => {
     return res.json({
       success: true,
       message: "Withdrawal request created",
-      data: recipient.data.data
+      data: response.data.data
     });
 
   } catch (err) {
@@ -84,18 +80,16 @@ app.post("/withdraw", async (req, res) => {
 
     return res.json({
       success: false,
-      message:
-        err.response?.data?.message ||
-        "Withdrawal failed"
+      message: err.response?.data?.message || "Withdrawal failed"
     });
   }
 });
 
 /* =========================
-   START SERVER (RENDER READY)
+   START SERVER (RENDER)
 ========================= */
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`One Bet backend running on port ${PORT}`);
+  console.log("One Bet backend running on port", PORT);
 });
