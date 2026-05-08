@@ -1,22 +1,22 @@
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
+require("dotenv").config();
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
-
-const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET;
 
 /* =========================
    HEALTH CHECK
 ========================= */
 app.get("/", (req, res) => {
-  res.send("One Bet One Click backend running 🚀");
+  res.send("One Bet, One Click backend is running 🚀");
 });
 
 /* =========================
-   RESOLVE ACCOUNT NAME
+   PAYSTACK ACCOUNT RESOLVE
 ========================= */
 app.post("/resolve-account", async (req, res) => {
   const { account_number, bank_code } = req.body;
@@ -26,26 +26,37 @@ app.post("/resolve-account", async (req, res) => {
       `https://api.paystack.co/bank/resolve?account_number=${account_number}&bank_code=${bank_code}`,
       {
         headers: {
-          Authorization: `Bearer ${PAYSTACK_SECRET}`
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET}`
         }
       }
     );
 
-    res.json(response.data.data);
+    return res.json({
+      success: true,
+      data: response.data.data
+    });
 
   } catch (err) {
-    res.json({ error: "Invalid account details" });
+    console.log("Resolve error:", err.response?.data || err.message);
+
+    return res.json({
+      success: false,
+      message:
+        err.response?.data?.message ||
+        "Unable to resolve account"
+    });
   }
 });
 
 /* =========================
-   WITHDRAW REQUEST
+   WITHDRAW (SIMULATION / TRANSFER READY)
 ========================= */
 app.post("/withdraw", async (req, res) => {
-  const { account_number, bank_code, account_name, amount } = req.body;
+  const { account_number, bank_code, amount, account_name } = req.body;
 
   try {
-    const response = await axios.post(
+    // STEP 1: Create transfer recipient
+    const recipient = await axios.post(
       "https://api.paystack.co/transferrecipient",
       {
         type: "nuban",
@@ -56,27 +67,35 @@ app.post("/withdraw", async (req, res) => {
       },
       {
         headers: {
-          Authorization: `Bearer ${PAYSTACK_SECRET}`,
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET}`,
           "Content-Type": "application/json"
         }
       }
     );
 
-    res.json({
+    return res.json({
       success: true,
-      message: "Withdrawal initiated",
-      data: response.data
+      message: "Withdrawal request created",
+      data: recipient.data.data
     });
 
   } catch (err) {
-    res.json({ error: "Withdrawal failed" });
+    console.log("Withdraw error:", err.response?.data || err.message);
+
+    return res.json({
+      success: false,
+      message:
+        err.response?.data?.message ||
+        "Withdrawal failed"
+    });
   }
 });
 
 /* =========================
-   START SERVER
+   START SERVER (RENDER READY)
 ========================= */
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
-  console.log("One Bet backend running on port", PORT);
+  console.log(`One Bet backend running on port ${PORT}`);
 });
